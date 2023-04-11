@@ -58,8 +58,10 @@ func main() {
 	flag.IntVar(&config.Port, "p", config.Port, "端口")
 	flag.StringVar(&config.Username, "u", config.Username, "用户")
 	flag.StringVar(&config.Password, "P", config.Password, "密码")
-	flag.StringVar(&config.Cmd, "c", config.Cmd, "命令，多条命令以;分割")
+	flag.StringVar(&config.Cmd, "c", config.Cmd, "命令，多条命令以“;”分割")
 	flag.BoolVar(&initConf, "i", false, "初始化配置文件")
+	flag.PrintDefaults()
+	//flag.Usage() // 打印帮助 -h/-help
 	flag.Parse()
 
 	if initConf {
