@@ -50,6 +50,7 @@ func init() {
 }
 
 func main() {
+	log.Println("about：https://github.com/bajins/bajins-shell-go")
 	var (
 		initConf bool
 	)
