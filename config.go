@@ -1,7 +1,7 @@
 package main
 
 import (
-	"gopkg.in/ini.v1"
+	"github.com/go-ini/ini"
 	"log"
 )
 
@@ -33,16 +33,14 @@ func initConfig() {
 }
 
 // 加载配置文件
-func loadConfig() bool {
+func loadConfig() {
 	cfg, err := ini.Load(configFileName)
 	if err != nil {
-		log.Printf("读取配置文件失败: %v", err)
-		return false
+		//log.Printf("读取配置文件失败: %v", err)
+		return
 	}
 	err = cfg.MapTo(config)
 	if err != nil {
-		log.Fatalln(err)
-		return false
+		log.Println(err)
 	}
-	return true
 }

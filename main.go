@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"log"
+	"net"
 	"os"
 	"time"
 )
@@ -12,23 +13,26 @@ import (
 // connect 创建连接并获取会话
 func connect(user, password, host string, port int) (*ssh.Session, error) {
 	var (
-		auth         []ssh.AuthMethod
 		addr         string
 		clientConfig *ssh.ClientConfig
 		client       *ssh.Client
 		session      *ssh.Session
 		err          error
 	)
-	// get auth method
-	auth = make([]ssh.AuthMethod, 0)
-	auth = append(auth, ssh.Password(password))
-
 	clientConfig = &ssh.ClientConfig{
-		User:    user,
-		Auth:    auth,
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
 		Timeout: 30 * time.Second,
+		//HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 验证服务端
+		//HostKeyCallback: ssh.FixedHostKey(nil), // 验证服务端
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error { // 验证服务端
+			log.Printf("主机名称：%s 地址：%s 公钥：%s", hostname, remote, string(ssh.MarshalAuthorizedKey(key)))
+			return nil
+		},
 	}
-	// connet to ssh
+	// connect to ssh
 	addr = fmt.Sprintf("%s:%d", host, port)
 
 	if client, err = ssh.Dial("tcp", addr, clientConfig); err != nil {
@@ -41,65 +45,52 @@ func connect(user, password, host string, port int) (*ssh.Session, error) {
 	return session, nil
 }
 
+func init() {
+	loadConfig()
+}
+
 func main() {
-	fmt.Println(`命令执行参数说明：
-    -h 地址，默认127.0.0.1
-    -p 端口，默认22
-    -u 用户名，默认root
-    -P 密码
-    -c 命令
-    -i 初始化配置文件`)
 	var (
-		host     string
-		port     int
-		username string
-		password string
-		cmd      string
 		initConf bool
 	)
-	flag.StringVar(&host, "h", "", "地址")
-	flag.IntVar(&port, "p", 0, "端口")
-	flag.StringVar(&username, "u", "", "用户")
-	flag.StringVar(&password, "P", "", "密码")
-	flag.StringVar(&cmd, "c", "", "命令")
-	flag.BoolVar(&initConf, "i", false, "初始化")
+	flag.StringVar(&config.Host, "h", config.Host, "地址")
+	flag.IntVar(&config.Port, "p", config.Port, "端口")
+	flag.StringVar(&config.Username, "u", config.Username, "用户")
+	flag.StringVar(&config.Password, "P", config.Password, "密码")
+	flag.StringVar(&config.Cmd, "c", config.Cmd, "命令，多条命令以;分割")
+	flag.BoolVar(&initConf, "i", false, "初始化配置文件")
 	flag.Parse()
 
 	if initConf {
 		initConfig()
 	}
 	// 当参数不存在时，尝试使用配置文件
-	if host == "" && port == 0 && username == "" && password == "" {
-		isSuccess := loadConfig()
-		if !isSuccess {
-			return
-		}
-		host = config.Host
-		port = config.Port
-		username = config.Username
-		password = config.Password
-		cmd = config.Cmd
+	if config.Host == "" {
+		log.Fatalln("远程地址不能为空")
 	}
-	if cmd == "" {
+	if config.Username == "" {
+		log.Fatalln("用户名不能为空")
+	}
+	if config.Cmd == "" {
 		log.Fatalln("需要执行的命令不能为空")
 	}
-	session, err := connect(username, password, host, port)
+	session, err := connect(config.Username, config.Password, config.Host, config.Port)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("远程连接错误：", err)
 	}
-	defer func(session *ssh.Session) { // 处理异常
+	defer func(session *ssh.Session) { // 正常退出或异常时，释放资源
 		err := session.Close()
 		if err != nil {
-			log.Println(err)
+			return
 		}
 	}(session)
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
 	session.Stdin = os.Stdin
 
-	err = session.Run(cmd) // 多行命令以分号分隔
+	err = session.Run(config.Cmd) // 多行命令以分号分隔
 	if err != nil {
-		log.Fatal(err)
+		log.Println("执行命令错误：", err)
 	}
 
 	// 执行交互式命令
@@ -108,7 +99,7 @@ func main() {
 	  if err != nil {
 	      panic(err)
 	  }
-	  defer func(fd int, oldState *terminal.State) { // 处理异常
+	  defer func(fd int, oldState *terminal.State) { // 正常退出或异常时，释放资源
 	      err := terminal.Restore(fd, oldState)
 	      if err != nil {
 	          log.Println(err)
